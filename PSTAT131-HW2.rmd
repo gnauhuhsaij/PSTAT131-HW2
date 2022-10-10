@@ -119,6 +119,7 @@ According to the bias-variance tradeoff, the expected test error consists of the
 #### Question 10
 
 Prove the bias-variance trade-off.
+
 \begin{align}
 E[(y_0 - \hat{f}(x_0))^2]&=E[(f(x_0)+\epsilon-E[\hat{f}(x_0)]+E[\hat{f}(x_0)]-\hat{f}(x_0))^2]\\
 &=E[(f(x_0)-E[\hat{f}(x_0)]+\epsilon)^2]+E[(E[\hat{f}(x_0)]-\hat{f}(x_0))^2]+2E[(f(x_0)-\hat{f}(x_0)+\epsilon)(E[\hat{f}(x_0)]-\hat{f}(x_0))]\\
