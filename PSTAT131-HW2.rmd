@@ -1,0 +1,154 @@
+---
+title: "PSTAT131-HW2"
+author: "Jiashu Huang"
+date: "2022-10-10"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, include=FALSE}
+library(tidyverse)
+library(tidymodels)
+library(ggplot2)
+library(yardstick)
+```
+### Question 1
+
+Assess and describe the distribution of `age`.
+```{r, fig.width=15,message=FALSE}
+options(readr.show_col_types = FALSE)
+abalone=read_csv("data/abalone.csv")
+abalone$age <- abalone$rings + 1.5
+ggplot(abalone,aes(age))+
+  geom_histogram()
+```
+The distribution of age is slightly positively skewed. It has a peak at age = 11.
+
+### Question 2
+
+```{r}
+set.seed(1234)
+data_split <- initial_split(abalone, prop = 4/5, strata = age)
+data_train <- training(data_split)
+data_test <- testing(data_split)
+```
+
+*Remember that you'll need to set a seed at the beginning of the document to reproduce your results.*
+
+### Question 3
+Steps for your recipe:
+
+1.  dummy code any categorical predictors
+
+2.  create interactions between
+
+    -   `type` and `shucked_weight`,
+    -   `longest_shell` and `diameter`,
+    -   `shucked_weight` and `shell_weight`
+
+3.  center all predictors, and
+
+4.  scale all predictors.
+
+```{r, message=FALSE}
+some_var <- names(data_train)[9]
+aba_recipe <- recipe(formula = age~., data = data_train) %>%
+  step_rm(some_var) %>%
+  step_dummy(all_nominal_predictors()) %>%
+  step_interact(terms = ~ starts_with('type'):shucked_weight) %>%
+  step_interact(terms = ~ longest_shell:diameter) %>%
+  step_interact(terms = ~ shucked_weight:shell_weight) %>%
+  step_center(all_numeric_predictors()) %>%
+  step_scale(all_numeric_predictors()) %>%
+  prep()
+```
+### Question 4
+
+Create and store a linear regression object using the `"lm"` engine.
+```{r}
+lm_model <- linear_reg() %>% 
+  set_engine("lm")
+```
+### Question 5
+1.  set up an empty workflow,
+2.  add the model you created in Question 4, and
+3.  add the recipe that you created in Question 3.
+```{r}
+workflow <- workflow() %>% 
+  add_model(lm_model) %>% 
+  add_recipe(aba_recipe)
+```
+
+### Question 6
+Use your `fit()` object to predict the age of a hypothetical female abalone with longest_shell = 0.50, diameter = 0.10, height = 0.30, whole_weight = 4, shucked_weight = 1, viscera_weight = 2, shell_weight = 1.
+```{r}
+model <- fit(workflow,data_train)
+newdata <- data.frame(type="F",longest_shell=0.50, diameter=0.10, height=0.30, whole_weight=4, shucked_weight=1, viscera_weight = 2, shell_weight=1, rings=0)
+pre <- predict(model, new_data=newdata)
+cat("The predicted age of the abalone is ", unlist(pre[1]), ".", sep="")
+```
+
+### Question 7
+1.  Create a metric set that includes *R^2^*, RMSE (root mean squared error), and MAE (mean absolute error).
+2.  Use `predict()` and `bind_cols()` to create a tibble of your model's predicted values from the **training data** along with the actual observed ages (these are needed to assess your model's performance).
+3.  Finally, apply your metric set to the tibble, report the results, and interpret the *R^2^* value.
+```{r}
+data_train_pred <- predict(model, new_data = data_train %>% select(-age))
+data_train_pred <- bind_cols(data_train_pred, data_train %>% select(age))
+metrics <- metric_set(rsq, rmse, mae)
+metrics(data_train_pred, truth = age, estimate = .pred)
+```
+By evaluating the model, we get a rmse value fo 2.15, r-square value of 0.56, and a mae value of 1.54. From rmse, we know that the average distance between the observation and the prediction is about 2.15 years. However, since the model only has a r-square of 0.56, only around 56% of the variance in age could be explained by the predictor variables in the model. It is clear that the performance of the model is not that well.
+
+### Required for 231 Students
+#### Question 8
+
+Which term(s) in the bias-variance tradeoff above represent the reproducible error? Which term(s) represent the irreducible error?\
+
+$[Bias(\hat{f}(x_0))]^2$ and $Var(\hat{f}(x_0))$ represent reproducible errors. $Var(\epsilon)$ represents the irreducible error. Even if we have the real f(), it is still impossible to get rid of $Var(\epsilon)$.
+
+#### Question 9
+
+Using the bias-variance tradeoff above, demonstrate that the expected test error is always at least as large as the irreducible error.
+
+According to the bias-variance tradeoff, the expected test error consists of the variance of $\hat{f}(x_0)$, bias of $\hat{f}(x_0)$, and the variance of $\epsilon$. However, the only thing we can change is the model assumption $\hat{f}(x_0)$. By finding the true $f()$, we are able to minimize the variance and bias of $\hat{f}(x_0)$ to zero. However, the term $Var(\epsilon)$ is irreducible since $\epsilon$ is a random noise independent of the model assumption and inherent in the problem itself. Thus, $E[(y_0 - \hat{f}(x_0))^2]=[Bias(\hat{f}(x_0))]^2+Var(\hat{f}(x_0))+Var(\epsilon)<min([Bias(\hat{f}(x_0))]^2+Var(\hat{f}(x_0))+Var(\epsilon))=0+0+Var(\epsilon)=Var(\epsilon)$
+
+#### Question 10
+
+Prove the bias-variance trade-off.
+\begin{align}
+E[(y_0 - \hat{f}(x_0))^2]&=E[(f(x_0)+\epsilon-E[\hat{f}(x_0)]+E[\hat{f}(x_0)]-\hat{f}(x_0))^2]\\
+&=E[(f(x_0)-E[\hat{f}(x_0)]+\epsilon)^2]+E[(E[\hat{f}(x_0)]-\hat{f}(x_0))^2]+2E[(f(x_0)-\hat{f}(x_0)+\epsilon)(E[\hat{f}(x_0)]-\hat{f}(x_0))]\\
+\end{align}
+The first term
+\begin{align}
+E[(f(x_0)-E[\hat{f}(x_0)]+\epsilon)^2]&=E[(f(x_0)-E[\hat{f}(x_0)])^2]+2E[\epsilon(f(x_0)-E[\hat{f}(x_0)])]+E[\epsilon^2]\\
+&=E[f(x_0)^2]-2E[f(x_0)E[\hat{f}(x_0)]]+E[E[\hat{f}(x_0)]^2]+2(f(x_0)-E[\hat{f}(x_0)])E[\epsilon]+E[\epsilon^2]\\
+&=E[f(x_0)^2]-2f(x_0)E[\hat{f}(x_0)]+E[\hat{f}(x_0)]^2+0+E[\epsilon^2]
+\end{align}
+Notice $E[f(x_0)^2]=E[f(x_0)]^2+Var(f(x_0))=E[f(x_0)]^2=f(x_0)^2$ and $E[\epsilon^2]=E[\epsilon]^2+Var(\epsilon)=Var(\epsilon)$\
+The first term then becomes
+\begin{align}
+E[f(x_0)^2]-2f(x_0)E[\hat{f}(x_0)]+E[\hat{f}(x_0)]^2+0+E[\epsilon^2]&=f(x_0)^2-2f(x_0)E[\hat{f}(x_0)]+E[\hat{f}(x_0)]^2+Var(\epsilon)\\
+&=(f(x_0)-E[\hat{f}(x_0)])^2+Var(\epsilon)\\
+&=[Bias(\hat{f}(x_0))]^2+Var(\epsilon)
+\end{align}
+The second term is, by the definition of variance,
+\begin{align}
+E[(E[\hat{f}(x_0)]-\hat{f}(x_0))^2] = Var(\hat{f}(x_0))
+\end{align}
+The third term is
+\begin{align}
+2E[(f(x_0)-\hat{f}(x_0)+\epsilon)(E[\hat{f}(x_0)]-\hat{f}(x_0))]
+&=2E[((f(x_0)-\hat{f}(x_0))(E[\hat{f}(x_0)]-\hat{f}(x_0))]+2E[\epsilon(E[\hat{f}(x_0)]-\hat{f}(x_0))]\\
+&=2((f(x_0)-\hat{f}(x_0))E[(E[\hat{f}(x_0)]-\hat{f}(x_0)]+2E[\epsilon]E[E[\hat{f}(x_0)]-\hat{f}(x_0)]\\
+&=2((f(x_0)-\hat{f}(x_0))(E[\hat{f}(x_0)]-E[\hat{f}(x_0)])+2\times 0E[E[\hat{f}(x_0)]-\hat{f}(x_0)]\\
+&=0+0=0
+\end{align}
+Combining three terms, we get
+\begin{align}
+E[(y_0 - \hat{f}(x_0))^2] = [Bias(\hat{f}(x_0))]^2+Var(\hat{f}(x_0))+Var(\epsilon)
+\end{align}
