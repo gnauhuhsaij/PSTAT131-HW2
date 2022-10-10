@@ -25,7 +25,7 @@ abalone$age <- abalone$rings + 1.5
 ggplot(abalone,aes(age))+
   geom_histogram()
 ```
-The distribution of age is slightly positively skewed. It has a peak at age = 11.
+The distribution of age is slightly positively skewed. It has a peak at age = 11. 
 
 ### Question 2
 
